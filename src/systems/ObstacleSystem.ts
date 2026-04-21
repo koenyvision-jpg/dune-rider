@@ -2,17 +2,13 @@ import Phaser from 'phaser'
 import { Obstacle } from '../entities/Obstacle'
 import {
   OBSTACLE_BASE_INTERVAL, OBSTACLE_MIN_INTERVAL, OBSTACLE_POOL_SIZE,
-  OBS_CAT1_SPEED, OBS_CAT2_SPEED, OBS_CAT3_SPEED,
-  HERO_SCALE, CEILING_Y, GROUND_Y, GAME_WIDTH,
+  ENEMY_SCALE, ENEMY_BANIT_SPEED, ENEMY_M2RED_SPEED, CEILING_Y, GROUND_Y, GAME_WIDTH,
 } from '../config'
 
-type Category = 1 | 2 | 3
-
-const CATEGORY: Record<Category, { scaleMult: number; speedMult: number; tint: number }> = {
-  1: { scaleMult: 1.0, speedMult: OBS_CAT1_SPEED, tint: 0x88ddff }, // cyan-blue canopy
-  2: { scaleMult: 1.2, speedMult: OBS_CAT2_SPEED, tint: 0xff8844 }, // orange canopy, bigger+slower
-  3: { scaleMult: 0.8, speedMult: OBS_CAT3_SPEED, tint: 0x88ff99 }, // green canopy, smaller+faster
-}
+const ENEMY_TYPES = [
+  { key: 'enemy-banit', speed: ENEMY_BANIT_SPEED },
+  { key: 'enemy-m2red', speed: ENEMY_M2RED_SPEED },
+]
 
 export class ObstacleSystem {
   private pool: Obstacle[] = []
@@ -21,7 +17,7 @@ export class ObstacleSystem {
 
   init(scene: Phaser.Scene, group: Phaser.Physics.Arcade.Group): void {
     for (let i = 0; i < OBSTACLE_POOL_SIZE; i++) {
-      const sprite = group.create(-200, -200, 'hero') as Phaser.Physics.Arcade.Sprite
+      const sprite = group.create(-200, -200, 'enemy-banit') as Phaser.Physics.Arcade.Sprite
       sprite.setActive(false).setVisible(false)
       const body = sprite.body as Phaser.Physics.Arcade.Body
       body.allowGravity = false
@@ -30,7 +26,7 @@ export class ObstacleSystem {
     }
   }
 
-  update(dt: number, elapsedMs: number, scrollSpeed: number): void {
+  update(dt: number, elapsedMs: number, _scrollSpeed: number): void {
     this.timer += dt * 1000
 
     const interval = Math.max(
@@ -40,7 +36,7 @@ export class ObstacleSystem {
 
     if (this.timer >= interval) {
       this.timer = 0
-      this.spawnOne(scrollSpeed)
+      this.spawnOne()
     }
 
     for (const obs of this.pool) {
@@ -50,13 +46,11 @@ export class ObstacleSystem {
     }
   }
 
-  private spawnOne(scrollSpeed: number): void {
+  private spawnOne(): void {
     const obs = this.pool.find(o => !o.active)
     if (!obs) return
 
-    const cat = (Phaser.Math.Between(1, 3)) as Category
-    const cfg = CATEGORY[cat]
-    const scale = HERO_SCALE * cfg.scaleMult
+    const type = ENEMY_TYPES[Phaser.Math.Between(0, ENEMY_TYPES.length - 1)]
 
     const minY = CEILING_Y + 30
     const maxY = GROUND_Y - 30
@@ -69,8 +63,7 @@ export class ObstacleSystem {
     this.recentYs.push(y)
     if (this.recentYs.length > 3) this.recentYs.shift()
 
-    const speed = scrollSpeed * cfg.speedMult
-    obs.spawn(GAME_WIDTH + 80, y, speed, scale, cfg.tint)
+    obs.spawn(GAME_WIDTH + 80, y, type.speed, ENEMY_SCALE, type.key)
   }
 
   reset(): void {

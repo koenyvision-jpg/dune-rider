@@ -2,13 +2,23 @@ export const GAME_WIDTH = 960
 export const GAME_HEIGHT = 540
 
 // Physics
-export const GRAVITY = 800
-export const HOLD_LIFT = -1100
+export const GRAVITY = 820
+export const HOLD_LIFT = -1550
 export const DRAG_COEFFICIENT = 0.92
 export const TERMINAL_VELOCITY = 600
-export const MAX_UPWARD_VELOCITY = -380
-export const GROUND_Y = 486   // 10% buffer from bottom (540 * 0.9)
+export const MAX_UPWARD_VELOCITY = -380  // lift ceiling after a full-speed dive
+export const MIN_UPWARD_VELOCITY = -60   // lift ceiling with no dive momentum
+export const STALL_TIME = 3              // seconds of continuous hold before lift cuts out
+
+// Vertical gravity zones (as fraction of GAME_HEIGHT)
+export const GRAVITY_EDGE = 1333        // gravity in top and bottom zones (1.625× GRAVITY)
+export const GRAVITY_ZONE_TOP    = 0.25 // above this → edge gravity
+export const GRAVITY_ZONE_BOTTOM = 0.85 // below this → edge gravity
+export const GROUND_Y = 432   // feet land at y=480 — mid ground strip
+export const BG_DUNE_Y = 370  // mid-dune layer center Y (was hardcoded 310)
 export const CEILING_Y = 54   // 10% buffer from top    (540 * 0.1)
+export const EXTRA_TOP = 162         // 30% of GAME_HEIGHT — extended vertical space above normal ceiling
+export const GRAVITY_CEILING = 1800  // gravity in high-altitude extended zone
 
 // Energy
 export const MAX_ENERGY = 100
@@ -28,6 +38,9 @@ export const HOLD_SPEED   = 90    // speed when holding spacebar (decelerated)
 
 // Hero sprite scale (1032×1675 source → ~88×142px on screen)
 export const HERO_SCALE = 0.085
+export const ENEMY_SCALE = 0.13        // 816px wide source → ~106px on screen
+export const ENEMY_BANIT_SPEED = 240   // px/s constant screen-space speed
+export const ENEMY_M2RED_SPEED  = 190  // px/s constant screen-space speed
 // Obstacle base scale so Cat1 matches hero visible height (~142px / 64px frame)
 export const PLAYER_SCALE = 2.22
 

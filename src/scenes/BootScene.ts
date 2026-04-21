@@ -7,7 +7,11 @@ export class BootScene extends Phaser.Scene {
   constructor() { super('BootScene') }
 
   preload(): void {
-    this.load.image('hero', 'assets/sprites/hero.png')
+    this.load.image('hero-lift',    'assets/sprites/hero-lift.png')
+    this.load.image('hero-neutral', 'assets/sprites/hero-neutral.png')
+    this.load.image('hero-dive',    'assets/sprites/hero-dive.png')
+    this.load.image('enemy-banit',  'assets/sprites/enemy-banit.png')
+    this.load.image('enemy-m2red',  'assets/sprites/enemy-m2red.png')
     this.load.image('bg-layer4-sky',       'assets/sprites/bg-layer4-sky.png')
     this.load.image('bg-layer3-mountains', 'assets/sprites/bg-layer3-mountains.png')
     this.load.image('bg-layer2-dunes',     'assets/sprites/bg-layer2-dunes.png')
@@ -22,7 +26,6 @@ export class BootScene extends Phaser.Scene {
 
   private generateTextures(): void {
     this.generatePlayerSheet()
-    this.generateObstacleSheet()
     this.generateParticle()
   }
 
@@ -74,41 +77,7 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
-  private generateObstacleSheet(): void {
-    const gfx = this.add.graphics()
-
-    for (let frame = 0; frame < 4; frame++) {
-      const ox = frame * FRAME
-      const w = frame % 2 * 2
-
-      // Drawn in white so setTint() applies the category colour cleanly
-      gfx.fillStyle(0xffffff)              // canopy
-      gfx.fillRect(ox + 8, 12 + w, 48, 10)
-      gfx.fillStyle(0xdddddd)              // canopy highlight
-      gfx.fillRect(ox + 12, 13 + w, 40, 4)
-      gfx.fillStyle(0xaaaaaa)              // lines
-      gfx.fillRect(ox + 20, 22 + w, 4, 12)
-      gfx.fillRect(ox + 40, 22 + w, 4, 12)
-      gfx.fillStyle(0xcccccc)              // harness
-      gfx.fillRect(ox + 22, 34 + w, 20, 8)
-      gfx.fillStyle(0x888899)              // body
-      gfx.fillRect(ox + 26, 28 + w, 12, 16)
-      gfx.fillStyle(0xffffff)              // helmet
-      gfx.fillRect(ox + 26, 20 + w, 12, 12)
-      gfx.fillStyle(0x222233)              // visor (stays dark regardless of tint)
-      gfx.fillRect(ox + 28, 24 + w, 8, 4)
-    }
-
-    gfx.generateTexture('obstacle', FRAME * 4, FRAME)
-    gfx.destroy()
-
-    const tex = this.textures.get('obstacle')
-    for (let i = 0; i < 4; i++) {
-      tex.add(i, 0, i * FRAME, 0, FRAME, FRAME)
-    }
-  }
-
-  private generateParticle(): void {
+private generateParticle(): void {
     const gfx = this.add.graphics()
     gfx.fillStyle(0xffffff).fillRect(0, 0, 6, 6)
     gfx.generateTexture('particle', 6, 6)
@@ -116,17 +85,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   private createAnims(): void {
-    // Hero uses a single static image — all anim states map to the same frame
-    const heroFrame = [{ key: 'hero' }]
-    this.anims.create({ key: 'player-idle',  frames: heroFrame, frameRate: 1, repeat: -1 })
-    this.anims.create({ key: 'player-hold',  frames: heroFrame, frameRate: 1, repeat: -1 })
-    this.anims.create({ key: 'player-glide', frames: heroFrame, frameRate: 1, repeat: -1 })
+    // Hero: one static image per state — animations are single-frame stubs
+    this.anims.create({ key: 'player-lift',    frames: [{ key: 'hero-lift' }],    frameRate: 1, repeat: -1 })
+    this.anims.create({ key: 'player-neutral', frames: [{ key: 'hero-neutral' }], frameRate: 1, repeat: -1 })
+    this.anims.create({ key: 'player-dive',    frames: [{ key: 'hero-dive' }],    frameRate: 1, repeat: -1 })
 
-    this.anims.create({
-      key: 'obstacle-fly',
-      frames: this.anims.generateFrameNumbers('obstacle', { start: 0, end: 3 }),
-      frameRate: 8,
-      repeat: -1,
-    })
   }
 }
