@@ -14,6 +14,8 @@ export class UIScene extends Phaser.Scene {
   private windText!: Phaser.GameObjects.Text
   private dangerText!: Phaser.GameObjects.Text
   private energyWarning!: Phaser.GameObjects.Text
+  private muteBtn!: Phaser.GameObjects.Text
+  private muted = false
 
   constructor() { super({ key: 'UIScene', active: false }) }
 
@@ -80,6 +82,23 @@ export class UIScene extends Phaser.Scene {
     vig.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT / 3)
     vig.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0.0, 0.0, 0.5, 0.5)
     vig.fillRect(0, GAME_HEIGHT * 2 / 3, GAME_WIDTH, GAME_HEIGHT / 3)
+
+    // Mute button — top left
+    this.muteBtn = this.add.text(14, 14, '♪', {
+      fontFamily: 'monospace',
+      fontSize: '20px',
+      color: '#ffffff',
+      stroke: '#000',
+      strokeThickness: 3,
+    }).setOrigin(0, 0).setInteractive({ useHandCursor: true })
+
+    this.muteBtn.on('pointerdown', () => {
+      this.muted = !this.muted
+      this.muteBtn.setText(this.muted ? '✕' : '♪')
+      this.muteBtn.setColor(this.muted ? '#ff4444' : '#ffffff')
+      const gs = this.scene.get('GameScene') as any
+      if (gs.bgMusic) gs.bgMusic.muted = this.muted
+    })
 
     const gameScene = this.scene.get('GameScene')
     gameScene.events.on('hudUpdate', this.onHudUpdate, this)

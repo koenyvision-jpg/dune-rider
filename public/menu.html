@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DUNE RIDER</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; image-rendering: pixelated; }
+
+  body {
+    background: #0a0010;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    font-family: 'Press Start 2P', monospace;
+  }
+
+  #game-screen {
+    width: 1280px;
+    height: 720px;
+    position: relative;
+    overflow: hidden;
+    transform-origin: center center;
+  }
+
+  /* SKY GRADIENT */
+  .sky {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      #0d0028 0%,
+      #1a0050 20%,
+      #3d0080 38%,
+      #7a006a 52%,
+      #c4005e 64%,
+      #e8503a 74%,
+      #f5a030 82%,
+      #f0c860 88%,
+      #d4882a 93%,
+      #b05c10 100%
+    );
+  }
+
+  /* STARS */
+  .stars {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 60%;
+    pointer-events: none;
+  }
+
+  /* SCANLINES */
+  .scanlines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.18) 3px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* CRT VIGNETTE */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 101;
+  }
+
+  /* DUNE LAYERS */
+  .dunes {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 260px;
+  }
+
+  /* HORIZON GLOW LINE */
+  .horizon-line {
+    position: absolute;
+    bottom: 220px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(to right, transparent, #ff6a00, #ffcc00, #ff006a, #ff6a00, transparent);
+    box-shadow: 0 0 12px 4px #ff6600aa;
+    z-index: 5;
+  }
+
+  /* GRID PERSPECTIVE FLOOR */
+  .grid-floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 220px;
+    overflow: hidden;
+    z-index: 3;
+  }
+
+  .grid-floor canvas {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* LOGO SECTION */
+  .logo-section {
+    position: absolute;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .logo-inner {
+    display: inline-block;
+    opacity: 0;
+    animation: logoIntro 1.4s cubic-bezier(0.22,1,0.36,1) forwards;
+  }
+
+  @keyframes logoIntro {
+    0%   { opacity: 0; transform: scale(0.04); filter: brightness(20) saturate(0); }
+    8%   { opacity: 1; transform: scale(0.18); filter: brightness(16) saturate(0); }
+    28%  { transform: scale(0.55); filter: brightness(11) saturate(0); }
+    50%  { transform: scale(0.82); filter: brightness(7) saturate(0); }
+    68%  { transform: scale(1.0);  filter: brightness(3) saturate(0.3); }
+    78%  { transform: scale(1.16); filter: brightness(1.6) saturate(0.7); }
+    88%  { transform: scale(0.97); filter: brightness(1.1) saturate(1); }
+    100% { transform: scale(1);   filter: none; opacity: 1; }
+  }
+
+  .logo-img {
+    width: 440px;
+    height: auto;
+    animation: logoShimmer 7s 1.5s ease-in-out infinite;
+    filter: brightness(0) invert(1) sepia(1) hue-rotate(265deg) saturate(4) drop-shadow(0 0 5px #bb00dd) drop-shadow(3px 3px 0px #880044);
+    position: relative;
+  }
+
+  @keyframes logoShimmer {
+    0%   { filter: brightness(0) invert(1) sepia(1) hue-rotate(265deg) saturate(4) drop-shadow(0 0 5px #bb00dd) drop-shadow(3px 3px 0px #880044); }
+    40%  { filter: brightness(0) invert(1) sepia(1) hue-rotate(280deg) saturate(6) drop-shadow(0 0 14px #ff44ff) drop-shadow(3px 3px 0px #cc0088); }
+    70%  { filter: brightness(0) invert(1) sepia(1) hue-rotate(265deg) saturate(5) drop-shadow(0 0 8px #dd00ff) drop-shadow(3px 3px 0px #aa0066); }
+    75%  { filter: brightness(0) invert(1) sepia(1) hue-rotate(265deg) saturate(5) drop-shadow(0 0 8px #dd00ff) drop-shadow(3px 3px 0px #aa0066); }
+    77%  { filter: brightness(0) invert(1) sepia(0) saturate(0) drop-shadow(0 0 50px #ffffff) drop-shadow(0 0 80px #ff88ff) drop-shadow(3px 3px 0px #ffffff); }
+    79%  { filter: brightness(0) invert(1) sepia(1) hue-rotate(300deg) saturate(10) drop-shadow(0 0 24px #ff88ff) drop-shadow(3px 3px 0px #ff00cc); }
+    100% { filter: brightness(0) invert(1) sepia(1) hue-rotate(265deg) saturate(4) drop-shadow(0 0 5px #bb00dd) drop-shadow(3px 3px 0px #880044); }
+  }
+
+  .logo-tagline {
+    font-size: 10px;
+    color: #ffcc00;
+    text-shadow: 2px 2px #c40000, 0 0 10px #ff6600;
+    letter-spacing: 4px;
+    animation: flicker 4s step-start infinite;
+  }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.3; }
+    97% { opacity: 1; }
+    98% { opacity: 0.5; }
+    99% { opacity: 1; }
+  }
+
+  /* MENU SECTION */
+  .menu-section {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  @keyframes cursorBlink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+
+  /* PRESS SPACEBAR */
+  .press-start-btn {
+    opacity: 0;
+    animation: menuAppear 0.1s 2.8s forwards;
+    font-size: 26px;
+    color: #ffee00;
+    text-shadow: 3px 3px #000, 0 0 16px #ff8800, 0 0 32px #ff4400;
+    letter-spacing: 4px;
+    cursor: pointer;
+    animation: insertBlink 1s step-start infinite;
+    white-space: nowrap;
+    text-align: center;
+    padding: 10px 0;
+  }
+
+  .press-start-btn:hover {
+    color: #ffffff;
+    text-shadow: 3px 3px #000, 0 0 16px #ff00ff, 0 0 32px #ff00aa;
+  }
+
+  @keyframes menuAppear {
+    to { opacity: 1; }
+  }
+
+  /* LEADERBOARD BUTTON */
+  .leaderboard-btn {
+    opacity: 0;
+    animation: leaderSlideUp 0.5s 3.1s cubic-bezier(0.22,1,0.36,1) forwards;
+    font-size: 15px;
+    color: #ffffff;
+    text-shadow: 2px 2px #000;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px 40px;
+    margin-top: 20px;
+    border: 2px solid #ff00cc66;
+    background: rgba(0,0,20,0.6);
+    box-shadow: 0 0 0 2px #000, 0 0 12px #ff00cc44;
+    letter-spacing: 2px;
+    transition: color 0.05s;
+  }
+
+  @keyframes leaderSlideUp {
+    from { opacity: 0; transform: translateY(60px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .leaderboard-btn:hover, .leaderboard-btn.selected {
+    color: #ffcc00;
+    text-shadow: 2px 2px #000, 0 0 10px #ff8800;
+    border-color: #ffcc00;
+    box-shadow: 0 0 0 2px #000, 0 0 16px #ff880066;
+  }
+
+  .leaderboard-btn .cursor {
+    color: #ffcc00;
+    width: 16px;
+    display: inline-block;
+    opacity: 0;
+  }
+
+  .leaderboard-btn.selected .cursor {
+    opacity: 1;
+    animation: cursorBlink 0.8s step-start infinite;
+  }
+
+  @keyframes insertBlink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+
+  /* COPYRIGHT */
+  .copyright {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 7px;
+    color: #ffffff66;
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  /* PARAGLIDERS */
+  .glider-left {
+    position: absolute;
+    left: 20px;
+    top: 260px;
+    z-index: 15;
+    width: 390px;
+    filter: drop-shadow(4px 8px 20px #cc0077cc) drop-shadow(0 0 40px #ff00aa66);
+    animation: gliderFloatLeft 5s 3.8s ease-in-out infinite, gliderSlideIn 2s 1.8s cubic-bezier(0.22,1,0.36,1) both;
+    opacity: 0;
+  }
+
+  .glider-right {
+    position: absolute;
+    right: 20px;
+    top: 220px;
+    z-index: 15;
+    width: 380px;
+    filter: drop-shadow(-4px 8px 20px #7700cccc) drop-shadow(0 0 40px #aa00ff66);
+    animation: gliderFloatRight 4.5s 4.0s ease-in-out infinite, gliderSlideInRight 2s 2.0s cubic-bezier(0.22,1,0.36,1) both;
+    opacity: 0;
+  }
+
+  @keyframes gliderFloatLeft {
+    0%, 100% { transform: translateY(0px) rotate(-1deg); }
+    50% { transform: translateY(-16px) rotate(1deg); }
+  }
+  /* left glider: no flip */
+
+  @keyframes gliderFloatRight {
+    0%, 100% { transform: translateY(0px) rotate(1deg); }
+    50% { transform: translateY(-20px) rotate(-1deg); }
+  }
+
+  @keyframes gliderSlideIn {
+    from { left: -450px; opacity: 0; }
+    to { left: 20px; opacity: 1; }
+  }
+
+  @keyframes gliderSlideInRight {
+    from { right: -450px; opacity: 0; }
+    to { right: 20px; opacity: 1; }
+  }
+
+  /* CORNER DECORATIONS */
+  .corner {
+    position: absolute;
+    z-index: 20;
+    font-size: 8px;
+    color: #ff00cc99;
+    letter-spacing: 1px;
+  }
+  .corner-tl { top: 12px; left: 16px; }
+  .corner-tr { top: 12px; right: 16px; text-align: right; }
+
+  /* VERSION */
+  .version {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    z-index: 20;
+    font-size: 8px;
+    color: #ff88ff88;
+    letter-spacing: 1px;
+  }
+
+  /* HI SCORE */
+  .hiscore {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-size: 9px;
+    color: #ffcc00;
+    text-shadow: 1px 1px #000, 0 0 6px #ff6600;
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  /* PIXEL STARS ANIMATION */
+  .star {
+    position: absolute;
+    background: white;
+    width: 2px;
+    height: 2px;
+  }
+
+  /* DUNE SCROLL LAYER */
+  .dune-bg {
+    position: absolute;
+    bottom: 0;
+    height: 200px;
+    z-index: 2;
+  }
+
+  /* FLASH OVERLAY for button press */
+  .flash {
+    position: absolute;
+    inset: 0;
+    background: white;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.1s;
+  }
+  .flash.active { opacity: 0.6; }
+</style>
+</head>
+<body>
+
+<div id="game-screen">
+  <!-- SKY -->
+  <div class="sky"></div>
+
+  <!-- STARS -->
+  <canvas id="starsCanvas" class="stars" width="1280" height="432"></canvas>
+
+  <!-- HORIZON GLOW -->
+  <div class="horizon-line"></div>
+
+  <!-- GRID FLOOR -->
+  <div class="grid-floor">
+    <canvas id="gridCanvas" width="1280" height="220"></canvas>
+  </div>
+
+  <!-- DUNE SILHOUETTES drawn on canvas -->
+  <canvas id="duneCanvas" class="dunes" width="1280" height="260" style="position:absolute;bottom:0;left:0;z-index:4;"></canvas>
+
+  <!-- SCANLINES + VIGNETTE -->
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+
+  <!-- HI SCORE -->
+  <div class="hiscore">HI-SCORE &nbsp; 00048500</div>
+  <div class="version">VER 1.00</div>
+
+  <!-- LOGO -->
+  <div class="logo-section">
+    <div class="logo-wrap">
+      <div class="logo-inner">
+        <img class="logo-img" src="assets/sprites/logo.png" alt="DUNE RIDER">
+      </div>
+    </div>
+  </div>
+
+  <!-- PARAGLIDERS: Hopper on left, Scraper on right (flipped) -->
+  <img class="glider-left" src="assets/sprites/glider-hopper.png" alt="Hopper">
+  <img class="glider-right" src="assets/sprites/glider-scraper.png" alt="Scraper">
+
+  <!-- MENU -->
+  <div class="menu-section" style="top:65%; margin-top:0;">
+    <div class="press-start-btn" id="item-start" onclick="selectItem(0)">
+      ▶ PRESS SPACEBAR ◀
+    </div>
+    <div class="leaderboard-btn" id="item-lead" onclick="selectItem(1)" onmouseenter="hoverItem(1)">
+      <span class="cursor">►</span>
+      <span>LEADERBOARD</span>
+    </div>
+  </div>
+  <div class="copyright">© 2025 DUNE RIDER. ALL RIGHTS RESERVED.</div>
+
+  <!-- Install hint — only shown in browser, not when already installed as PWA -->
+  <div id="install-hint" style="display:none;position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(0,0,20,0.85);border:1px solid #ff00cc66;padding:10px 20px;font-family:'Press Start 2P',monospace;font-size:7px;color:#ff88ff;text-align:center;letter-spacing:1px;white-space:nowrap;">
+    TAP SHARE → ADD TO HOME SCREEN TO INSTALL
+    <span onclick="document.getElementById('install-hint').remove()" style="margin-left:14px;cursor:pointer;color:#ff4488;">✕</span>
+  </div>
+
+  <!-- FLASH -->
+  <div class="flash" id="flash"></div>
+
+  <!-- MUSIC -->
+  <audio id="menu-music" src="assets/audio/menu-music.mp3" loop></audio>
+  <audio id="title-sting" src="assets/audio/Dune Rider.mp3"></audio>
+</div>
+
+<script>
+// ── SCALE TO VIEWPORT ──────────────────────────────────────────────
+function scaleScreen() {
+  const el = document.getElementById('game-screen');
+  const vp = window.visualViewport;
+  const w = vp ? vp.width : window.innerWidth;
+  const h = vp ? vp.height : window.innerHeight;
+  const scaleX = w / 1280;
+  const scaleY = h / 720;
+  const scale = Math.min(scaleX, scaleY);
+  el.style.transform = `scale(${scale})`;
+}
+scaleScreen();
+window.addEventListener('resize', scaleScreen);
+window.addEventListener('orientationchange', function() { setTimeout(scaleScreen, 200); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', scaleScreen);
+
+// ── STARS ──────────────────────────────────────────────────────────
+const starsCanvas = document.getElementById('starsCanvas');
+const sc = starsCanvas.getContext('2d');
+const stars = [];
+for (let i = 0; i < 180; i++) {
+  stars.push({
+    x: Math.random() * 1280,
+    y: Math.random() * 432,
+    r: Math.random() < 0.15 ? 2 : 1,
+    a: Math.random(),
+    speed: 0.3 + Math.random() * 1.2
+  });
+}
+function drawStars(t) {
+  sc.clearRect(0, 0, 1280, 432);
+  stars.forEach(s => {
+    const flicker = 0.5 + 0.5 * Math.sin(t * s.speed + s.x);
+    sc.fillStyle = `rgba(255,230,255,${s.a * flicker})`;
+    sc.fillRect(Math.floor(s.x), Math.floor(s.y), s.r, s.r);
+  });
+}
+
+// ── PERSPECTIVE GRID ───────────────────────────────────────────────
+const gridCanvas = document.getElementById('gridCanvas');
+const gc = gridCanvas.getContext('2d');
+let gridOffset = 0;
+
+function drawGrid(t) {
+  gc.clearRect(0, 0, 1280, 220);
+  gridOffset = (t * 60) % 40;
+
+  const vp = { x: 640, y: 0 };
+  const H = 220;
+  const cols = 16;
+  const colSpacing = 1280 / cols;
+
+  // Vertical lines
+  for (let i = 0; i <= cols; i++) {
+    const bx = i * colSpacing;
+    gc.beginPath();
+    gc.moveTo(vp.x, vp.y);
+    gc.lineTo(bx, H);
+    const alpha = 0.08 + 0.22 * (1 - Math.abs(i - cols/2) / (cols/2));
+    gc.strokeStyle = `rgba(255, 100, 220, ${alpha})`;
+    gc.lineWidth = 1;
+    gc.stroke();
+  }
+
+  // Horizontal lines (perspective)
+  const rows = 10;
+  for (let r = 0; r <= rows; r++) {
+    const t2 = (r + gridOffset / 40) / rows;
+    const ease = t2 * t2;
+    const y = H * ease;
+    const xLeft = vp.x - (vp.x) * ease;
+    const xRight = vp.x + (1280 - vp.x) * ease;
+    const alpha = 0.08 + ease * 0.28;
+    gc.beginPath();
+    gc.moveTo(xLeft, y);
+    gc.lineTo(xRight, y);
+    gc.strokeStyle = `rgba(255, 80, 200, ${alpha})`;
+    gc.lineWidth = 1;
+    gc.stroke();
+  }
+
+  // Glow at bottom
+  const grad = gc.createLinearGradient(0, 170, 0, 220);
+  grad.addColorStop(0, 'rgba(200,0,150,0)');
+  grad.addColorStop(1, 'rgba(200,0,150,0.18)');
+  gc.fillStyle = grad;
+  gc.fillRect(0, 0, 1280, 220);
+}
+
+// ── DUNES ──────────────────────────────────────────────────────────
+const duneCanvas = document.getElementById('duneCanvas');
+const dc = duneCanvas.getContext('2d');
+let duneScroll1 = 0, duneScroll2 = 0;
+
+function makeDunePath(ctx, w, h, offsetX, amplitude, freq, yBase) {
+  ctx.beginPath();
+  ctx.moveTo(-10, h);
+  for (let x = -10; x <= w + 10; x += 3) {
+    const y = yBase + Math.sin((x + offsetX) * freq) * amplitude
+             + Math.sin((x + offsetX * 0.7) * freq * 2.1) * (amplitude * 0.4);
+    if (x === -10) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w + 10, h);
+  ctx.lineTo(-10, h);
+  ctx.closePath();
+}
+
+function drawDunes(t) {
+  dc.clearRect(0, 0, 1280, 260);
+
+  // Far dune layer (slow)
+  duneScroll1 = (t * 18) % 1280;
+  makeDunePath(dc, 1280, 260, duneScroll1, 28, 0.007, 80);
+  dc.fillStyle = '#7a3800';
+  dc.fill();
+
+  // Shadow on far dune
+  makeDunePath(dc, 1280, 260, duneScroll1 + 8, 20, 0.007, 88);
+  dc.fillStyle = '#4a2000';
+  dc.fill();
+
+  // Mid dune
+  duneScroll2 = (t * 35) % 1280;
+  makeDunePath(dc, 1280, 260, duneScroll2, 36, 0.009, 130);
+  dc.fillStyle = '#c46010';
+  dc.fill();
+
+  makeDunePath(dc, 1280, 260, duneScroll2 + 12, 28, 0.009, 142);
+  dc.fillStyle = '#8a3c00';
+  dc.fill();
+
+  // Near dune (fast)
+  const scroll3 = (t * 65) % 1280;
+  makeDunePath(dc, 1280, 260, scroll3, 48, 0.011, 185);
+  dc.fillStyle = '#e07820';
+  dc.fill();
+
+  makeDunePath(dc, 1280, 260, scroll3 + 20, 38, 0.011, 200);
+  dc.fillStyle = '#a84c00';
+  dc.fill();
+
+  // Highlight crest on near
+  makeDunePath(dc, 1280, 260, scroll3, 4, 0.011, 183);
+  dc.fillStyle = '#ffcc8844';
+  dc.fill();
+}
+
+// ── MAIN LOOP ──────────────────────────────────────────────────────
+// On iOS, skip canvas animations to avoid exceeding GPU memory limits
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+let loopRunning = true;
+window.__stopMenuLoop = function() { loopRunning = false; };
+
+if (!isIOS) {
+  function loop(ts) {
+    if (!loopRunning) return;
+    const t = ts / 1000;
+    drawStars(t);
+    drawGrid(t);
+    drawDunes(t);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+} else {
+  // Draw once statically on iOS — no animation loops to avoid GPU memory limits
+  drawStars(0);
+  drawGrid(0);
+  drawDunes(0);
+}
+
+// Show install hint only when running in browser (not installed PWA)
+if (!window.navigator.standalone) {
+  document.getElementById('install-hint').style.display = 'block';
+}
+
+// ── MUSIC ──────────────────────────────────────────────────────────
+const music = document.getElementById('menu-music');
+function tryPlayMusic() {
+  music.play().catch(() => {});
+  document.removeEventListener('keydown', tryPlayMusic);
+  document.removeEventListener('pointerdown', tryPlayMusic);
+}
+music.play().catch(() => {
+  // Autoplay blocked — wait for first interaction
+  document.addEventListener('keydown', tryPlayMusic);
+  document.addEventListener('pointerdown', tryPlayMusic);
+});
+
+// Title sting plays 3s after page load
+setTimeout(() => {
+  document.getElementById('title-sting').play().catch(() => {});
+}, 2000);
+
+// ── MENU INTERACTION ───────────────────────────────────────────────
+let selected = 0;
+const items = ['item-start', 'item-lead'];
+
+function updateSelected() {
+  document.getElementById('item-lead').classList.toggle('selected', selected === 1);
+}
+
+function hoverItem(idx) {
+  selected = idx;
+  updateSelected();
+}
+
+function selectItem(idx) {
+  selected = idx;
+  updateSelected();
+  if (idx === 0) startGame();
+}
+
+function startGame() {
+  flashScreen();
+  document.getElementById('menu-music').pause();
+  setTimeout(() => { if (window.__startGame) window.__startGame(); }, 220);
+}
+
+function flashScreen() {
+  const f = document.getElementById('flash');
+  f.classList.add('active');
+  setTimeout(() => f.classList.remove('active'), 120);
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+    selected = (selected - 1 + items.length) % items.length;
+    updateSelected();
+  } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+    selected = (selected + 1) % items.length;
+    updateSelected();
+  } else if (e.key === ' ') {
+    startGame();
+  }
+});
+</script>
+</body>
+</html>

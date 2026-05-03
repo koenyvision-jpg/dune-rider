@@ -3,18 +3,17 @@ import { BackgroundLayer } from '../entities/BackgroundLayer'
 import { PhysicsSystem } from '../systems/PhysicsSystem'
 import { EnergySystem } from '../systems/EnergySystem'
 import { WindSystem } from '../systems/WindSystem'
-import { ScrollSystem } from '../systems/ScrollSystem'
 import { ScoringSystem } from '../systems/ScoringSystem'
 import { ObstacleSystem } from '../systems/ObstacleSystem'
-import { GAME_WIDTH, GAME_HEIGHT, HERO_SCALE, MAX_UPWARD_VELOCITY, MIN_UPWARD_VELOCITY, TERMINAL_VELOCITY, CRUISE_SPEED, STALL_TIME, GRAVITY, GRAVITY_EDGE, GRAVITY_ZONE_TOP, GRAVITY_ZONE_BOTTOM, BG_DUNE_Y, CEILING_Y, EXTRA_TOP, GRAVITY_CEILING } from '../config'
+import { GAME_WIDTH, GAME_HEIGHT, HERO_SCALE, MAX_UPWARD_VELOCITY, MIN_UPWARD_VELOCITY, TERMINAL_VELOCITY, TRIM_SPEED, DIVE_SPEED_MAX, STALL_TIME, GRAVITY, GRAVITY_EDGE, GRAVITY_BLEND_RANGE, GRAVITY_ZONE_TOP, GRAVITY_ZONE_BOTTOM, CEILING_Y, EXTRA_TOP, GRAVITY_CEILING } from '../config'
 import { mapRange, lerp, clamp } from '../utils/math'
+import { SoundSystem } from '../systems/SoundSystem'
 
 export class GameScene extends Phaser.Scene {
   // Systems
   physicsSystem!: PhysicsSystem
   energySystem!: EnergySystem
   windSystem!: WindSystem
-  scrollSystem!: ScrollSystem
   scoringSystem!: ScoringSystem
   obstacleSystem!: ObstacleSystem
 
@@ -35,8 +34,11 @@ export class GameScene extends Phaser.Scene {
   private heroState: 'lift' | 'neutral' | 'dive' = 'dive'
   private neutralTimer = 0
   private committedUpwardCap = MIN_UPWARD_VELOCITY
+  private committedLiftMult = 0
+  private cameraVelX = 0
   private sandEmitter!: Phaser.GameObjects.Particles.ParticleEmitter
-
+  private stopGround: (() => void) | null = null
+  private bgMusic: HTMLAudioElement | null = null
 
   constructor() { super('GameScene') }
 
@@ -48,21 +50,26 @@ export class GameScene extends Phaser.Scene {
     this.heroState = 'dive'
     this.neutralTimer = 0
     this.committedUpwardCap = MIN_UPWARD_VELOCITY
+    this.committedLiftMult = 0
+    this.horizontalVelocity = TRIM_SPEED
+    this.cameraVelX = 0
 
     this.physicsSystem = new PhysicsSystem()
     this.energySystem = new EnergySystem()
     this.windSystem = new WindSystem()
-    this.scrollSystem = new ScrollSystem()
     this.scoringSystem = new ScoringSystem()
     this.obstacleSystem = new ObstacleSystem()
 
     this.energySystem.onDepleted(() => {
       this.events.emit('energyDepleted')
+      SoundSystem.playEnergyDepleted()
     })
 
     this.scoringSystem.onMilestone((score) => {
       this.events.emit('scoreMilestone', score)
       this.cameras.main.flash(200, 255, 200, 0, false)
+      const idx = [500, 1000, 2500, 5000, 10000, 25000].indexOf(score)
+      SoundSystem.playMilestone(idx >= 0 ? idx : 0)
     })
 
     this.createBackground()
@@ -72,10 +79,20 @@ export class GameScene extends Phaser.Scene {
     this.setupCollision()
     this.createSandEmitter()
 
-    // Extend physics world upward and set camera bounds to allow upward scroll
-    this.physics.world.setBounds(0, -EXTRA_TOP, GAME_WIDTH, GAME_HEIGHT + EXTRA_TOP)
-    this.cameras.main.setBounds(0, -EXTRA_TOP, GAME_WIDTH, GAME_HEIGHT + EXTRA_TOP)
+    // Camera follows hero — infinite horizontal, extended vertical for high-altitude zone
+    this.cameras.main.setBounds(0, -EXTRA_TOP, Number.MAX_SAFE_INTEGER, GAME_HEIGHT + EXTRA_TOP)
+    this.cameras.main.scrollX = 0
     this.cameras.main.scrollY = 0
+
+    // Gameplay music — random pick
+    const tracks = [
+      import.meta.env.BASE_URL + 'assets/audio/Gameplay Music/ES_Maniamaster - Lupus Nocte.mp3',
+      import.meta.env.BASE_URL + 'assets/audio/Gameplay Music/ES_Pink Vortex - ELFL.mp3',
+    ]
+    this.bgMusic = new Audio(tracks[Math.floor(Math.random() * tracks.length)])
+    this.bgMusic.loop = true
+    this.bgMusic.volume = 0.7
+    this.bgMusic.play().catch(() => {})
 
     // Launch UI overlay
     this.scene.launch('UIScene')
@@ -86,26 +103,43 @@ export class GameScene extends Phaser.Scene {
     // Scale factor to fit game height 540px: 540/768 = 0.703
     const S = 540 / 768
 
-    // Layer 4 — sky (768px tall): full screen, slowest
+    // Solid sky fill — always covers the full viewport even when camera scrolls into negative Y.
+    // Placed first so everything renders on top of it.
+    const skyFill = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x5fa8d8)
+    skyFill.setScrollFactor(0)
+
+    // All tileSprite layers use setScrollFactor(0) — screen-fixed. tilePositionX driven by camera.
+
+    // Layer 4 — sky texture: full screen, very slow horizontal parallax
     const sky = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg-layer4-sky')
-    sky.setTileScale(S, S)
+    sky.setTileScale(S, S).setScrollFactor(0)
     this.bgLayers.push(new BackgroundLayer(this, sky, 0.04))
 
-    // Layer 3 — mountains (768px tall): shifted down so peaks just peek above dunes
+    // Layer 3 — back dunes: crests at screen y≈155 (40px above front y=195)
+    // T=57 → screen y=0 shows texture y=57 < 212 (transparent) ✓; no bottom wrap within 540px
     const mtn = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg-layer3-mountains')
-    mtn.setTileScale(S, S)
-    mtn.tilePositionY = -65  // negative = texture shifts down → peaks move lower on screen
+    mtn.setTileScale(S, S).setScrollFactor(0)
+    mtn.tilePositionY = 57
+    mtn.setTint(0xaacce8)
     this.bgLayers.push(new BackgroundLayer(this, mtn, 0.15))
 
-    // Layer 2 — mid dunes (419px tall): 15% smaller, moved up in screenspace
-    const DS = S * 0.85
-    const duneH = Math.round(419 * DS)
-    const duneY = BG_DUNE_Y
-    const dune = this.add.tileSprite(GAME_WIDTH / 2, duneY, GAME_WIDTH, duneH, 'bg-layer2-dunes')
-    dune.setTileScale(DS, DS)
+    // Layer 2.5 — mid dunes: crests at screen y≈175 (20px above front y=195)
+    // T=53 → screen y=0 shows texture y=53 < 228 (transparent) ✓; tile H=583 > 540 so no wrap
+    const mid = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg-layer3-mountains')
+    mid.setTileScale(S * 1.08, S * 1.08).setScrollFactor(0)
+    mid.tilePositionY = 53
+    mid.setTint(0xd4e8ec)
+    this.bgLayers.push(new BackgroundLayer(this, mid, 0.45))
+
+    // Layer 2 — front dunes (cropped 1376×371, content starts at row 0)
+    // Span from duneTopY to bottom; ground layer covers any vertical tile repeat below
+    const duneTopY = 195
+    const duneH = GAME_HEIGHT - duneTopY
+    const dune = this.add.tileSprite(GAME_WIDTH / 2, duneTopY + duneH / 2, GAME_WIDTH, duneH, 'bg-layer2-dunes')
+    dune.setTileScale(S, S).setScrollFactor(0)
     this.bgLayers.push(new BackgroundLayer(this, dune, 0.88))
 
-    // Layer 1 — foreground ground: screen-anchored so it never scrolls off-bottom
+    // Layer 1 — foreground ground: screen-anchored, no vertical response
     const gndH = Math.round(169 * S)
     const gnd = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT - gndH / 2, GAME_WIDTH, gndH, 'bg-layer1-ground')
     gnd.setTileScale(S, S).setScrollFactor(0)
@@ -180,15 +214,24 @@ export class GameScene extends Phaser.Scene {
 
     // Update systems
     this.windSystem.update(delta)
-    this.scrollSystem.update(dt, this.isHolding)
 
     // Track hold/release duration before energy update so drainMult uses current frame
     const wasHolding = this.holdDuration > 0
     if (this.isHolding) {
-      // Snapshot the upward cap once at the moment of press, hold it for the entire climb
+      // Snapshot the upward cap once at the moment of press, hold it for the entire climb.
+      // In the extended high-altitude zone: no new lift budget — cap is capped to current
+      // upward velocity only (so momentum from below carries through, but re-engaging hold
+      // mid-zone gives no new boost).
       if (!wasHolding) {
-        const diveNorm = clamp(this.horizontalVelocity / CRUISE_SPEED, 0, 1)
-        this.committedUpwardCap = lerp(MIN_UPWARD_VELOCITY, MAX_UPWARD_VELOCITY, diveNorm)
+        const diveNorm = clamp(this.horizontalVelocity / DIVE_SPEED_MAX, 0, 1)
+        if (this.player.y < CEILING_Y) {
+          // Extended zone: no new lift budget — only existing momentum carries through
+          this.committedUpwardCap = Math.min(0, this.physicsSystem.velocityY)
+          this.committedLiftMult = 0
+        } else {
+          this.committedUpwardCap = lerp(MIN_UPWARD_VELOCITY, MAX_UPWARD_VELOCITY, diveNorm)
+          this.committedLiftMult = Math.pow(diveNorm, 0.5)  // square root: medium dives get much more lift
+        }
       }
       this.holdDuration += dt
       this.releaseDuration = 0
@@ -200,17 +243,15 @@ export class GameScene extends Phaser.Scene {
     // ENERGY DISABLED FOR TUNING — bar still displays but has no gameplay effect
     this.energySystem.update(dt, this.isHolding, 1)
     const effectiveHolding = this.isHolding
-    const liftMult = Math.max(0, 1 - this.holdDuration / STALL_TIME) * 1.1
 
     // Gravity builds from 0.35→1 over ~1.7 s after release
     const gravityMult = Math.min(1, 0.35 + this.releaseDuration * 0.38)
 
-    // Zone gravity: stronger near top/bottom edges, and heaviest in the high-altitude extended zone
+    // Gravity zones: GRAVITY in the mid band, GRAVITY_EDGE at top/bottom, GRAVITY_CEILING above ceiling
     const yNorm = this.player.y / GAME_HEIGHT
-    const blendRange = 0.05
+    const blendRange = GRAVITY_BLEND_RANGE
     let zoneGravity: number
     if (this.player.y < CEILING_Y) {
-      // High-altitude zone: ramps GRAVITY_EDGE → GRAVITY_CEILING as player climbs into extended space
       const t = clamp((CEILING_Y - this.player.y) / EXTRA_TOP, 0, 1)
       zoneGravity = lerp(GRAVITY_EDGE, GRAVITY_CEILING, t)
     } else if (yNorm < GRAVITY_ZONE_TOP - blendRange) {
@@ -226,6 +267,10 @@ export class GameScene extends Phaser.Scene {
     }
     const effectiveGravityMult = gravityMult * (zoneGravity / GRAVITY)
 
+    // Lift strength is determined by how much dive was built up at the moment of press.
+    // No dive = no lift. Full dive = full lift. Decays over hold duration (stall).
+    const liftMult = Math.max(0, 1 - this.holdDuration / STALL_TIME) * 1.1 * this.committedLiftMult
+
     const windForce = 0
     const upwardCap = effectiveHolding ? this.committedUpwardCap : MAX_UPWARD_VELOCITY
 
@@ -237,12 +282,6 @@ export class GameScene extends Phaser.Scene {
     if (this.physicsSystem.isAtCeiling(this.player.y)) {
       this.physicsSystem.velocityY = 0
     }
-
-    // Dynamic camera: scroll up when player enters the extended high-altitude zone
-    const targetScrollY = this.player.y < CEILING_Y
-      ? clamp(this.player.y - CEILING_Y, -EXTRA_TOP, 0)
-      : 0
-    this.cameras.main.scrollY = lerp(this.cameras.main.scrollY, targetScrollY, Math.min(1, dt * 3))
 
     // Ground halt system: after 4s on ground slow everything to a stop → game over
     const atGround = this.physicsSystem.isAtGround(this.player.y)
@@ -262,9 +301,9 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    const displaySpeed = this.scrollSystem.currentSpeed * haltFactor
+    const displaySpeed = this.horizontalVelocity * haltFactor
     this.scoringSystem.update(dt, displaySpeed)
-    this.obstacleSystem.update(dt, this.elapsedMs, displaySpeed)
+    this.obstacleSystem.update(dt, this.elapsedMs, this.cameras.main.scrollX)
 
     // Sand spray at hero feet when dragging along the ground
     const feetX = this.player.x
@@ -277,47 +316,74 @@ export class GameScene extends Phaser.Scene {
     }
 
     for (const layer of this.bgLayers) {
-      layer.update(displaySpeed, dt)
+      layer.update(this.cameras.main.scrollX, this.cameras.main.scrollY)
     }
+
 
     // Player animation + pitch rotation driven by actual vertical velocity
     // Fast up → -35°, neutral/slow → ~-10°, fast down → +35°
-    this.updatePlayerAnim(effectiveHolding, dt)
+    this.updatePlayerAnim(effectiveHolding, dt, atGround)
     const vy = this.physicsSystem.velocityY
-    const targetAngle = vy < 0
+    const targetAngle = atGround ? 0 : vy < 0
       ? mapRange(vy, MAX_UPWARD_VELOCITY, 0, -58, 0)
       : mapRange(Math.min(vy, 250), 0, 250, 0, 58)
-    this.player.angle = Phaser.Math.Linear(this.player.angle, targetAngle, dt * 5)
+    this.player.angle = Phaser.Math.Linear(this.player.angle, targetAngle, dt * (atGround ? 12 : 5))
 
-    // Edge proximity: near right → more drag/less drive; near left → more drive/less drag (subtle ±20%)
-    const xNorm = (this.player.x - 50) / (GAME_WIDTH - 100)  // 0=left edge, 1=right edge
+    // Edge proximity: screen-relative position within the camera viewport
+    const screenX = this.player.x - this.cameras.main.scrollX
+    const xNorm = clamp((screenX - 50) / (GAME_WIDTH - 100), 0, 1)
     const edgeDriveMult = lerp(1.2, 0.8, xNorm)
     const edgeDragMult  = lerp(0.8, 1.2, xNorm)
 
-    // Horizontal momentum
+    // ── Sound loops: ground slide ──
+    const sliding = atGround && this.horizontalVelocity > 10
+    if (sliding && !this.stopGround) {
+      this.stopGround = SoundSystem.startGroundSlide(() => this.horizontalVelocity)
+    } else if (!sliding && this.stopGround) {
+      this.stopGround(); this.stopGround = null
+    }
+
+    // Horizontal momentum — trim-speed model
     if (atGround) {
-      // Sand drag overrides everything: linear deceleration + leftward pull
-      if (this.horizontalVelocity > 0) {
-        this.horizontalVelocity = Math.max(0, this.horizontalVelocity - 320 * dt)
-      }
-      this.horizontalVelocity -= 80 * dt
+      // Ground drag: gradual slide to a halt
+      this.horizontalVelocity = Math.max(0, this.horizontalVelocity - 65 * dt)
     } else if (!effectiveHolding) {
       if (vy > 20) {
-        // Exponential dive thrust: starts gentle, doubles every ~1.2s of continuous release
+        // Dive thrust: builds speed above trim (exponential ramp over ~1.2s)
         const diveMult = Math.min(6, Math.pow(2.2, this.releaseDuration / 1.2))
-        this.horizontalVelocity += vy * 0.286 * edgeDriveMult * diveMult * dt
+        this.horizontalVelocity += vy * 0.329 * edgeDriveMult * diveMult * dt
       }
-      this.horizontalVelocity *= Math.pow(lerp(0.988, 0.980, xNorm), dt * 60)
+      // Always pull toward trim speed — decay from dive peak or recover from hold
+      this.horizontalVelocity += (TRIM_SPEED - this.horizontalVelocity) * 0.8 * dt
     } else {
-      if (this.holdDuration < 0.6) {
-        this.horizontalVelocity *= Math.pow(0.988, dt * 60)
+      // Stage 1 (0–2s hold): fast bleed toward ~35 px/s floor
+      // Stage 2 (2s+ hold): very slow final bleed to zero
+      if (this.holdDuration < 2.0) {
+        this.horizontalVelocity += (80 - this.horizontalVelocity) * 0.6 * dt
       } else {
-        this.horizontalVelocity -= 55 * edgeDragMult * dt
+        this.horizontalVelocity += (40 - this.horizontalVelocity) * 0.15 * dt
       }
     }
-    this.horizontalVelocity = clamp(this.horizontalVelocity, -70, 180) * haltFactor
+    this.horizontalVelocity = clamp(this.horizontalVelocity, 0, DIVE_SPEED_MAX) * haltFactor
     this.player.x += this.horizontalVelocity * dt
-    this.player.x = clamp(this.player.x, 50, GAME_WIDTH - 50)
+
+    // Camera — horizontal: velocity chases hero speed with heavy inertia, plus a gentle
+    // position-correction nudge so it doesn't drift too far. Camera coasts when hero slows.
+    const targetScrollX = Math.max(0, this.player.x - GAME_WIDTH * 0.28)
+    const posCorrection = (targetScrollX - this.cameras.main.scrollX) * 0.4
+    this.cameraVelX = lerp(this.cameraVelX, this.horizontalVelocity + posCorrection, dt * 0.5)
+    this.cameras.main.scrollX = Math.max(0, this.cameras.main.scrollX + this.cameraVelX * dt)
+
+    // Camera — vertical: only follows when hero is within top 20% of screen.
+    // Background vertical offset is applied manually in the bg update call below.
+    const camScreenY = this.player.y - this.cameras.main.scrollY
+    if (camScreenY < GAME_HEIGHT * 0.2) {
+      const targetScrollY = clamp(this.player.y - GAME_HEIGHT * 0.2, -EXTRA_TOP, 0)
+      this.cameras.main.scrollY = lerp(this.cameras.main.scrollY, targetScrollY, dt * 1.5)
+    } else {
+      this.cameras.main.scrollY = lerp(this.cameras.main.scrollY, 0, dt * 4)
+      if (Math.abs(this.cameras.main.scrollY) < 0.5) this.cameras.main.scrollY = 0
+    }
 
     // Emit HUD update event
     this.events.emit('hudUpdate', {
@@ -328,10 +394,14 @@ export class GameScene extends Phaser.Scene {
     })
   }
 
-  private updatePlayerAnim(holding: boolean, dt: number): void {
+  private updatePlayerAnim(holding: boolean, dt: number, atGround = false): void {
     let newState = this.heroState
 
-    if (this.heroState === 'neutral') {
+    if (atGround) {
+      // Sliding on ground — always show neutral/level pose
+      newState = 'neutral'
+      this.neutralTimer = 0.1
+    } else if (this.heroState === 'neutral') {
       this.neutralTimer -= dt
       if (this.neutralTimer <= 0) {
         // Resolve to whichever state input currently demands
@@ -353,10 +423,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private stopAllSounds(): void {
+    this.stopGround?.(); this.stopGround = null
+    this.bgMusic?.pause(); this.bgMusic = null
+  }
+
   private triggerGameOver(): void {
     if (!this.gameRunning) return
     this.gameRunning = false
     this.isHolding = false
+
+    this.stopAllSounds()
+    SoundSystem.playCollision()
 
     this.player.angle = 0
     this.sandEmitter.stop()
@@ -366,7 +444,6 @@ export class GameScene extends Phaser.Scene {
     this.heroState = 'dive'
     this.neutralTimer = 0
     this.committedUpwardCap = MIN_UPWARD_VELOCITY
-    this.cameras.main.scrollY = 0
     this.cameras.main.shake(200, 0.015)
 
     // Burst particles
@@ -392,6 +469,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.stopAllSounds()
     this.sandEmitter?.stop()
     this.bgLayers = []
     this.input.off('pointerdown')

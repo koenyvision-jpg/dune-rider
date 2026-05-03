@@ -3,22 +3,23 @@ export const GAME_HEIGHT = 540
 
 // Physics
 export const GRAVITY = 820
-export const HOLD_LIFT = -1550
+export const HOLD_LIFT = -1800
 export const DRAG_COEFFICIENT = 0.92
 export const TERMINAL_VELOCITY = 600
 export const MAX_UPWARD_VELOCITY = -380  // lift ceiling after a full-speed dive
 export const MIN_UPWARD_VELOCITY = -60   // lift ceiling with no dive momentum
 export const STALL_TIME = 3              // seconds of continuous hold before lift cuts out
 
-// Vertical gravity zones (as fraction of GAME_HEIGHT)
-export const GRAVITY_EDGE = 1333        // gravity in top and bottom zones (1.625× GRAVITY)
-export const GRAVITY_ZONE_TOP    = 0.25 // above this → edge gravity
-export const GRAVITY_ZONE_BOTTOM = 0.85 // below this → edge gravity
+// Vertical gravity zones — heavy at beach + above dunes, normal in between
+export const GRAVITY_EDGE        = 1333 // gravity at top and bottom edges
+export const GRAVITY_CEILING     = 1800 // gravity in the extended high-altitude zone
+export const GRAVITY_ZONE_TOP    = 0.42 // above this (fraction of screen) → heavy gravity
+export const GRAVITY_ZONE_BOTTOM = 0.85 // below this → heavy gravity (beach level)
+export const GRAVITY_BLEND_RANGE = 0.18 // transition width on each side of zone boundaries
 export const GROUND_Y = 432   // feet land at y=480 — mid ground strip
 export const BG_DUNE_Y = 370  // mid-dune layer center Y (was hardcoded 310)
 export const CEILING_Y = 54   // 10% buffer from top    (540 * 0.1)
 export const EXTRA_TOP = 162         // 30% of GAME_HEIGHT — extended vertical space above normal ceiling
-export const GRAVITY_CEILING = 1800  // gravity in high-altitude extended zone
 
 // Energy
 export const MAX_ENERGY = 100
@@ -32,9 +33,9 @@ export const MIN_WIND = -300
 export const MAX_WIND = 300
 export const WIND_LIFT_MULTIPLIER = 1.0
 
-// Scroll / speed — purely input-driven, no time progression
-export const CRUISE_SPEED = 200   // speed when releasing (full speed)
-export const HOLD_SPEED   = 90    // speed when holding spacebar (decelerated)
+// Forward speed
+export const TRIM_SPEED   = 150   // natural cruise speed — hero always returns here when gliding neutral
+export const DIVE_SPEED_MAX = 437 // top speed reachable through sustained diving
 
 // Hero sprite scale (1032×1675 source → ~88×142px on screen)
 export const HERO_SCALE = 0.085

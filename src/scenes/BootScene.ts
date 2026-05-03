@@ -16,6 +16,9 @@ export class BootScene extends Phaser.Scene {
     this.load.image('bg-layer3-mountains', 'assets/sprites/bg-layer3-mountains.png')
     this.load.image('bg-layer2-dunes',     'assets/sprites/bg-layer2-dunes.png')
     this.load.image('bg-layer1-ground',    'assets/sprites/bg-layer1-ground.png')
+    this.load.image('logo',          'assets/sprites/logo.png')
+    this.load.image('glider-hopper', 'assets/sprites/glider-hopper.png')
+    this.load.image('glider-scraper','assets/sprites/glider-scraper.png')
   }
 
   create(): void {

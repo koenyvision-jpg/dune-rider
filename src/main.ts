@@ -7,10 +7,10 @@ import { GameOverScene } from './scenes/GameOverScene'
 import { GAME_WIDTH, GAME_HEIGHT } from './config'
 
 new Phaser.Game({
-  type: Phaser.AUTO,
+  type: Phaser.CANVAS,
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  backgroundColor: '#000000',
+  backgroundColor: '#5fa8d8',
   pixelArt: true,
   roundPixels: true,
   scale: {

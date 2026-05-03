@@ -1,73 +1,65 @@
 import Phaser from 'phaser'
-import { GAME_WIDTH, GAME_HEIGHT } from '../config'
 
 export class MenuScene extends Phaser.Scene {
+  private menuEl: HTMLDivElement | null = null
+  private injectedStyles: HTMLStyleElement[] = []
+
   constructor() { super('MenuScene') }
 
   create(): void {
-    const S = 540 / 768
-    const sky = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg-layer4-sky')
-    sky.setTileScale(S, S)
-    const mtn = this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 'bg-layer3-mountains')
-    mtn.setTileScale(S, S)
-    mtn.tilePositionY = -65
-    const DS = S * 0.85
-    const duneH = Math.round(419 * DS)
-    this.add.tileSprite(GAME_WIDTH / 2, 310, GAME_WIDTH, duneH, 'bg-layer2-dunes').setTileScale(DS, DS)
-    const gndH = Math.round(169 * S)
-    this.add.tileSprite(GAME_WIDTH / 2, GAME_HEIGHT - gndH / 2, GAME_WIDTH, gndH, 'bg-layer1-ground').setTileScale(S, S)
-
-    // Scanlines
-    const scan = this.add.graphics()
-    for (let y = 0; y < GAME_HEIGHT; y += 4) {
-      scan.fillStyle(0x000000, 0.07)
-      scan.fillRect(0, y, GAME_WIDTH, 2)
+    ;(window as any).__startGame = () => {
+      this.removeMenu()
+      this.scene.start('GameScene')
     }
 
-    // Title
-    this.add.text(GAME_WIDTH / 2, 90, 'DUNE RIDER', {
-      fontFamily: 'monospace',
-      fontSize: '52px',
-      color: '#ff6ec7',
-      stroke: '#220011',
-      strokeThickness: 6,
-    }).setOrigin(0.5)
+    fetch(import.meta.env.BASE_URL + 'menu.html')
+      .then(r => r.text())
+      .then(html => this.injectMenu(html))
+  }
 
-    this.add.text(GAME_WIDTH / 2, 158, 'PARAGLIDING ENDURANCE', {
-      fontFamily: 'monospace',
-      fontSize: '16px',
-      color: '#00cfff',
-      letterSpacing: 5,
-    }).setOrigin(0.5)
+  private injectMenu(html: string): void {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
 
-    // Hero preview — 1032×1675 source, scale to fit nicely on menu
-    const preview = this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 20, 'hero')
-    preview.setScale(0.18)
-
-    // Pulsing prompt
-    const startText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 100, 'TAP TO FLY', {
-      fontFamily: 'monospace',
-      fontSize: '24px',
-      color: '#ffd700',
-      stroke: '#000',
-      strokeThickness: 4,
-    }).setOrigin(0.5)
-
-    this.tweens.add({
-      targets: startText,
-      alpha: 0.15,
-      duration: 550,
-      yoyo: true,
-      repeat: -1,
+    // Inject <style> blocks into document head
+    doc.querySelectorAll('style').forEach(s => {
+      const style = document.createElement('style')
+      style.textContent = s.textContent
+      document.head.appendChild(style)
+      this.injectedStyles.push(style)
     })
 
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 54, 'HOLD = FLY UP       RELEASE = GLIDE', {
-      fontFamily: 'monospace',
-      fontSize: '14px',
-      color: '#888888',
-    }).setOrigin(0.5)
+    // Wrapper replicates the body centering from menu.html
+    const wrapper = document.createElement('div')
+    wrapper.style.cssText = 'position:fixed;inset:0;z-index:1000;background:#0a0010;display:flex;align-items:center;justify-content:center;overflow:hidden;'
 
-    this.input.once('pointerdown', () => this.scene.start('GameScene'))
-    this.input.keyboard!.once('keydown-SPACE', () => this.scene.start('GameScene'))
+    // Copy all non-script body children into wrapper
+    Array.from(doc.body.childNodes).forEach(node => {
+      if ((node as Element).tagName !== 'SCRIPT') {
+        wrapper.appendChild(document.importNode(node, true))
+      }
+    })
+
+    document.body.appendChild(wrapper)
+    this.menuEl = wrapper
+
+    // Execute scripts in order (innerHTML doesn't run them)
+    doc.querySelectorAll('script').forEach(old => {
+      const s = document.createElement('script')
+      s.textContent = old.textContent
+      document.body.appendChild(s)
+      document.body.removeChild(s)
+    })
+  }
+
+  private removeMenu(): void {
+    this.menuEl?.remove()
+    this.menuEl = null
+    this.injectedStyles.forEach(s => s.remove())
+    this.injectedStyles = []
+    delete (window as any).__startGame
+  }
+
+  shutdown(): void {
+    this.removeMenu()
   }
 }

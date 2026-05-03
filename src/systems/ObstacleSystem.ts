@@ -14,6 +14,7 @@ export class ObstacleSystem {
   private pool: Obstacle[] = []
   private timer = 0
   private recentYs: number[] = []
+  private cameraScrollX = 0
 
   init(scene: Phaser.Scene, group: Phaser.Physics.Arcade.Group): void {
     for (let i = 0; i < OBSTACLE_POOL_SIZE; i++) {
@@ -26,8 +27,9 @@ export class ObstacleSystem {
     }
   }
 
-  update(dt: number, elapsedMs: number, _scrollSpeed: number): void {
+  update(dt: number, elapsedMs: number, cameraScrollX: number): void {
     this.timer += dt * 1000
+    this.cameraScrollX = cameraScrollX
 
     const interval = Math.max(
       OBSTACLE_MIN_INTERVAL,
@@ -40,7 +42,7 @@ export class ObstacleSystem {
     }
 
     for (const obs of this.pool) {
-      if (obs.active && obs.sprite.x < -120) {
+      if (obs.active && obs.sprite.x < cameraScrollX - 120) {
         obs.deactivate()
       }
     }
@@ -63,7 +65,7 @@ export class ObstacleSystem {
     this.recentYs.push(y)
     if (this.recentYs.length > 3) this.recentYs.shift()
 
-    obs.spawn(GAME_WIDTH + 80, y, type.speed, ENEMY_SCALE, type.key)
+    obs.spawn(this.cameraScrollX + GAME_WIDTH + 80, y, type.speed, ENEMY_SCALE, type.key)
   }
 
   reset(): void {
